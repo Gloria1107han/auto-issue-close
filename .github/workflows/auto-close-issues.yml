@@ -2,16 +2,32 @@ name: Auto Close Issues
 
 on:
   issues:
-    types: [labeled]
+    types: [labeled, opened]
 
 jobs:
   close-issue:
     runs-on: ubuntu-latest
-    if: contains(github.event.label.name, 'completed') || contains(github.event.label.name, 'wontfix')
     steps:
-      - name: Close issue
+      - name: Check if issue should be closed
+        id: check-labels
         run: |
-          echo "Closing issue #${{ github.event.issue.number }} with label '${{ github.event.label.name }}'"
+          # Get current issue labels
+          LABELS="${{ github.event.issue.labels.*.name }}"
+          echo "Current labels: $LABELS"
+          
+          # Check if issue has 'completed' or 'wontfix' labels
+          if [[ "$LABELS" =~ "completed" ]] || [[ "$LABELS" =~ "wontfix" ]]; then
+            echo "should_close=true" >> $GITHUB_OUTPUT
+            echo "Issue has closing label, will close"
+          else
+            echo "should_close=false" >> $GITHUB_OUTPUT
+            echo "Issue doesn't have closing label, skipping"
+          fi
+      
+      - name: Close issue
+        if: steps.check-labels.outputs.should_close == 'true'
+        run: |
+          echo "Closing issue #${{ github.event.issue.number }} with labels: ${{ github.event.issue.labels.*.name }}"
           curl -X PATCH \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
